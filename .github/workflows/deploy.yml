@@ -7,9 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  build-and-push:
+    build-and-push:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -24,6 +23,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -34,7 +36,7 @@ jobs:
         run: docker buildx build --platform linux/amd64 --load -t ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest .
 
       - name: Push Docker image
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest 
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
 
   test:
     runs-on: ubuntu-latest
@@ -100,3 +102,4 @@ jobs:
             docker run -d --name inai-app -p 8000:8000 \
               --env-file /home/${{ secrets.EC2_USER }}/inai.env \
               ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
+
