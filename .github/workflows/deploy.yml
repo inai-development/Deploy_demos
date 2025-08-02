@@ -7,8 +7,9 @@ on:
     branches: [main]
 
 jobs:
-    build-and-push:
+  build-and-push:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -102,4 +103,3 @@ jobs:
             docker run -d --name inai-app -p 8000:8000 \
               --env-file /home/${{ secrets.EC2_USER }}/inai.env \
               ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
-
