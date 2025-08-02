@@ -1,0 +1,14 @@
+venv/
+chat_history.db
+
+
+__pycache__/
+*.pyc
+*.db
+
+__pycache__
+
+.env
+Models/ffmpeg/bin/
+*.exe
+__pycache__/
