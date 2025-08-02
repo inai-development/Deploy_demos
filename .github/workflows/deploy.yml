@@ -76,6 +76,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             echo "${{ secrets.ENV_FILE }}" > /home/${{ secrets.EC2_USER }}/inai.env
+            echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> inai.env
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
             docker stop inai-app || true
             docker rm inai-app || true
