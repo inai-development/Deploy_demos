@@ -36,8 +36,8 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --push \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest \
-            .
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest .
+
 
 
 
@@ -105,6 +105,7 @@ jobs:
             docker run -d --name inai-app -p 8000:8000 \
               --env-file /home/${{ secrets.EC2_USER }}/inai.env \
               ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
+
 
 
 
