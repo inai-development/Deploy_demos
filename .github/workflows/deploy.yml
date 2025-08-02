@@ -30,16 +30,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build Docker image
         run: docker buildx build --platform linux/amd64 --load -t ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest .
 
-        
-
       - name: Push Docker image
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest 
 
   test:
     runs-on: ubuntu-latest
@@ -105,4 +100,3 @@ jobs:
             docker run -d --name inai-app -p 8000:8000 \
               --env-file /home/${{ secrets.EC2_USER }}/inai.env \
               ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
-
