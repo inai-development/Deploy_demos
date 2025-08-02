@@ -1,33 +1,25 @@
-
-FROM python:3.10-slim
-WORKDIR /app
-COPY . .
-RUN apt-get update && apt-get install -y ffmpeg libsndfile1 && \
-    pip install --upgrade pip && \
-CMD ["python", "main.py"]
-
-# Base image
+# Use official Python
 FROM python:3.11-slim
 
-# Working directory
+# Set working dir
 WORKDIR /app
 
-# Dependencies copy
+# Copy only dependencies first (for better caching)
 COPY requirements.txt .
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip \
+ && pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
+# Install OS dependencies
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg libsndfile1 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Copy rest of your application code
 COPY . .
 
-# Command to run your serve.py
+# Expose port if relevant
+EXPOSE 8000
+
+# Final command:
 CMD ["python", "serve.py"]
-
-FROM python:3.10-slim
-WORKDIR /app
-COPY . .
-RUN apt-get update && apt-get install -y ffmpeg libsndfile1 && \
-    pip install --upgrade pip && \
-CMD ["python", "main.py"]
-
