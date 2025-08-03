@@ -70,11 +70,11 @@ jobs:
             --region $AWS_REGION \
             --query 'repositories[0].repositoryUri' \
             --output text):latest
-          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_ENV
 
       - name: Register new ECS task definition
         run: |
-          sed "s|<IMAGE_URI>|${{ steps.image.outputs.image_uri }}|" .aws/task-definition.json > updated-task-def.json
+          sed "s|<IMAGE_URI>|${{ env.image_uri }}|" .aws/task-definition.json > updated-task-def.json
           aws ecs register-task-definition \
             --cli-input-json file://updated-task-def.json
 
