@@ -84,3 +84,4 @@ jobs:
             docker run -d --name inai-app -p 8000:8000 \
               --env-file /home/${{ secrets.EC2_USER }}/inai.env \
               ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
+
