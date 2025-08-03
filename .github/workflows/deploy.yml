@@ -25,12 +25,13 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
       - name: Build & push Docker image
-        run: |
+        run:
           docker buildx build \
             --platform linux/amd64 \
             --push \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest \
             .
+
 
   test:
     needs: build-and-push
@@ -84,4 +85,5 @@ jobs:
             docker run -d --name inai-app -p 8000:8000 \
               --env-file /home/${{ secrets.EC2_USER }}/inai.env \
               ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
+
 
