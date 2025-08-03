@@ -5,85 +5,82 @@ on:
     branches:
       - main
 
-env:
-  AWS_REGION: ap-south-1
-  ECR_REPOSITORY: inai-voice-assistant
-  ECS_CLUSTER: inai-ecs-cluster
-  ECS_SERVICE: inai-service
-  CONTAINER_NAME: inai-container
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, tag, and push Docker image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Create & bootstrap builder
         run: |
-          docker build -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest .
-          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+          docker buildx create --use --name inai-builder
+          docker buildx inspect --bootstrap
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Build & push Docker image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --push \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest \
+            .
 
   test:
     needs: build-and-push
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      TOGGLE_PASSWORD: ${{ secrets.TOGGLE_PASSWORD }}
+      TOGGLE_KEY: ${{ secrets.TOGGLE_KEY }}
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
-      - name: Install dependencies and run tests
+      - name: Install test dependencies
         run: |
-          pip install -r requirements.txt pytest
-          pytest
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest flake8
+      - name: Lint & test
+        run: |
+          flake8 app/ inai_project/ serve.py --count --exit-zero --max-line-length=127
+          pytest tests/
 
   deploy:
     needs: [build-and-push, test]
     runs-on: ubuntu-latest
     steps:
-      - name: Configure AWS credentials
+      - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Get latest image URI
-        id: image
-        run: |
-          IMAGE_URI=$(aws ecr describe-repositories \
-            --repository-names $ECR_REPOSITORY \
-            --region $AWS_REGION \
-            --query 'repositories[0].repositoryUri' \
-            --output text):latest
-          echo "image_uri=$IMAGE_URI" >> $GITHUB_ENV
-
-      - name: Register new ECS task definition
-        run: |
-          sed "s|<IMAGE_URI>|${{ env.image_uri }}|" .aws/task-definition.json > updated-task-def.json
-          aws ecs register-task-definition \
-            --cli-input-json file://updated-task-def.json
-
-      - name: Deploy to ECS
-        run: |
-          NEW_TASK_DEF_ARN=$(aws ecs describe-task-definition --task-definition $ECR_REPOSITORY \
-            --query 'taskDefinition.taskDefinitionArn' --output text)
-          aws ecs update-service \
-            --cluster $ECS_CLUSTER \
-            --service $ECS_SERVICE \
-            --task-definition $NEW_TASK_DEF_ARN \
-            --force-new-deployment
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Log in Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: SSH and deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "${{ secrets.ENV_FILE }}" > /home/${{ secrets.EC2_USER }}/inai.env
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
+            docker stop inai-app || true
+            docker rm inai-app || true
+            docker run -d --name inai-app -p 8000:8000 \
+              --env-file /home/${{ secrets.EC2_USER }}/inai.env \
+              ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
