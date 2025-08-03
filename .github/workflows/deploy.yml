@@ -9,31 +9,31 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
+        with:
+          fetch-depth: 1
+      - name: Verify build context
+        run: |
+          ls -la
+          test -f Dockerfile || { echo "Dockerfile not found in $(pwd)"; exit 1; }
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@4f4c614b3e7c0b2d0e7d8e27c692380e38936532
       - name: Create & bootstrap builder
         run: |
           docker buildx create --use --name inai-builder
-          docker buildx inspect --bootstrap
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-
-      - name: Build & push Docker image
+          docker buildx inspect --bootstrap inai-builder
+          echo "Buildx builder setup completed"
+      - name: Verify Buildx setup
         run: |
           docker buildx version
           docker buildx inspect inai-builder || { echo "Buildx builder not found"; exit 1; }
-          docker buildx build \
-            --platform linux/amd64 \
-            --push \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest \
-            -f docker/Dockerfile \
-            docker/
+      - name: Log in to Docker Hub
+        uses: docker/login-action@1f8e8c3e9d4b2b2e9d9f8b2b2e9f8b2b2e9f8b2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Build & push Docker image
+        run: docker buildx build --platform linux/amd64 --push -t ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest .
 
   test:
     needs: build-and-push
@@ -44,11 +44,19 @@ jobs:
       TOGGLE_PASSWORD: ${{ secrets.TOGGLE_PASSWORD }}
       TOGGLE_KEY: ${{ secrets.TOGGLE_KEY }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
+        with:
+          fetch-depth: 1
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f
         with:
           python-version: '3.11'
+      - name: Cache Python dependencies
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
@@ -62,19 +70,13 @@ jobs:
     needs: [build-and-push, test]
     runs-on: ubuntu-latest
     steps:
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
       - name: Log in Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@1f8e8c3e9d4b2b2e9d9f8b2b2e9f8b2b2e9f8b2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
       - name: SSH and deploy
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@6d54b7c7e3b351a92b7bc5a75a8350939b2b2a3f
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
@@ -87,5 +89,3 @@ jobs:
             docker run -d --name inai-app -p 8000:8000 \
               --env-file /home/${{ secrets.EC2_USER }}/inai.env \
               ${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant:latest
-
-
